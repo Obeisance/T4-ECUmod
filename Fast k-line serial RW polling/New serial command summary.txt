@@ -1,0 +1,44 @@
+2018-10-06
+
+Additional serial polling behavior has been added on top of the
+existing ISO-9141 K-line OBD response routines.
+
+In order to access the special memory read/write routines,
+begin with a conventional ISO-9141 slow init:
+
+send 0x33 at 5-baud
+read 0x55 (sync byte) at 10400 baud (the rest is at 10400 baud)
+read key (0x94)
+read key (0x94)
+send bit inverted key (0x6B)
+read 0xCC
+
+Then it is possible to send a conventional OBD message
+that increases baud rate: mode 0x3C toggles between
+125kbaud and 10.4 kbaud:
+
+send: [68 6A F1 3C sum]
+read: [48 6B 10 7C "ASCII chars of baud rate- either 125031 or 10419" sum]
+
+After the init, the special read or write packets can be sent.
+These have a simple call-and-response behavior:
+
+The greatest number of bytes that can be sent is 128, as is the greatest
+number of bytes that can be read back.
+
+(in hex)
+read memory: [55 #bytes_in_packet 11 #bytes_to_read_at_addr 24_bit_addr ... etc. ... sum]
+example: [55 08 11 11 08 0D 56 EE] -> this is a command to read 17 (0x11) 
+bytes from addr. 0x80d56 (these are the 17 bytes of the VIN). There are 8 bytes
+in this packet, so the #bytes_in_packet is 0x08.
+
+The ECU will respond with
+read memory response: [AA #bytes_in_packet 11 ... data... sum]
+example response: [AA 15 11 53 43 43 50 43 31 31 31 30 35 48 41 33 30 30 30 30 B0]
+which is [header length cmd SCCPC11105HA30000 sum]
+
+A 'write to memory' command is similar, but instead uses the 
+write command byte 0x88 instead of the read command byte 0x11
+write memory: [55 #bytes_in_packet 88 #bytes_to_write 24_bit_addr ... etc. ... sum]
+write memory response: [AA 04 88 36] -> acknowledge of write command does not return
+any data

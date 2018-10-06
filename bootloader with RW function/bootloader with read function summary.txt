@@ -1,0 +1,42 @@
+Use this at your own risk.
+
+This bootloader contains patched code that enables
+access to pre-existing serial response routines.
+
+In order to use this, reprogram addresses 0x8000-0x10000
+with the contents in this ROM (which contains from 0x0
+thru 0x10000).
+
+The bootloader CRC signature is stored with an error
+intentionally in order to allow access to the recovery
+bootloader as well.
+
+In order to use the read-functionality, first you must enter
+the bootloader as one normally would (this includes sending 
+a first message that is encoded with commands to potentially
+erase flash memory or write to ROM).
+
+then, send a '116' message that includes the address to read 
+from and the number of bytes to read.
+
+enter bootloader with 1 113 114
+ECU responds with inverted checksum byte (114 -> 141) for every packet it receives.
+It also expects to receive an inverted checksum for every packet it sends.
+
+example first message (in decimal):
+encoded: [50 112 0 0 0 53 0 0 0 0 0 0 0 0 0 0 0 0 15 112 30 15 112 30 15 112 30 15 112 30 15 112 30 172 72 24 158 117 23 15 112 30 15 112 30 217 16 29 140 225 21 224]
+decoded: [0 0 0 0 0 0 0 0 0 0 0 85 7 8 0 0 0 0 100 0 200 0]
+this packet says not to clear any flash memory, and to write 00 00 
+to 0x80000 (this address is in RAM space, so we don't mess up flash memory)
+
+example read memory command: 
+encoded: [6 116 0 8 13 86 17 246] -> no encoding is used
+this is 6 bytes in packet (exclude count and sum), 116 is the 'read' command
+00 08 13 86 is address 0x0080D56 and 17 is the number of bytes to read
+This command would read back the 17 characters of the VIN from RAM. 246 is the sum.
+
+The RAM buffer for sending messages is maybe 256 bytes, so don't request more
+bytes to be read per message than that.
+
+The ECU will respond with a '112' packet containing the information that was
+requested.
