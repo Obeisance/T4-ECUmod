@@ -1,0 +1,68 @@
+This is a log of changes made to source s-record/binary files.
+-Obeisance
+
+*------------------------------------------------------------*
+State: Depricated
+File: 2018-09-16 fast K-line C121E002H serial arb13.BIN
+Date: 2018-09-16
+Origin source: C121E0002H - VIN31475.bin
+Changes: 
+0x31030 - add code for fast serial response over K-line
+	-> see source file: 2018-09-09 fast K-line logging.X68
+0x105ca - change JSR command endpoint from $22ada to $31030 
+	to use patched-in code
+	4EB9 00022ADA -> 4EB9 00031030
+0x288da - change serial module config. register (QSMCR) to
+	have serial arbitration ID#13 instead of #1
+	33FC00 81 00FFFC00 -> 33FC00 8D 00FFFC00
+
+*------------------------------------------------------------*
+
+*------------------------------------------------------------*
+State: Depricated
+File: C121E0002H - Generic VIN- Serial arbID 13, OBD and fast RW.bin
+Date: 2018-10-06
+Origin source: C121E0002H - VIN31475.bin
+Changes: 
+0x31030 - add code for fast serial response over K-line
+	-> see source file: 2018-09-23 fast K-line plus ISO9141 OBD.X68
+0x105ca - change JSR command endpoint from $22ada to $31030 
+	to use patched-in code
+	4EB9 00022ADA -> 4EB9 00031030
+0x288da - change serial module config. register (QSMCR) to
+	have serial arbitration ID#13 instead of #1
+	33FC00 81 00FFFC00 -> 33FC00 8D 00FFFC00
+
+*------------------------------------------------------------*
+
+*------------------------------------------------------------*
+State: Depricated
+File: C121E0002H - Generic VIN- Serial arbID 13, OBD and fast RW.bin
+Date: 2018-12-01
+Origin source: C121E0002H - VIN31475.bin
+Changes: 
+0x31030 - add code for fast serial response over K-line
+	-> see source file: 2018-09-23 fast K-line plus ISO9141 OBD - 125031.X68
+0x105ca - change JSR command endpoint from $22ada to $31030 
+	to use patched-in code
+	4EB9 00022ADA -> 4EB9 00031030
+0x288da - change serial module config. register (QSMCR) to
+	have serial arbitration ID#13 instead of #1
+	33FC00 81 00FFFC00 -> 33FC00 8D 00FFFC00
+
+*------------------------------------------------------------*
+
+*------------------------------------------------------------*
+State: Active
+File: C121E0002H - Generic VIN- OBD and fast RW - 125031 v1,2.bin
+Date: 2020-05-10
+Origin source: C121E0002H - VIN31475.bin
+Changes: 
+0x31030 - add code for fast serial response over K-line
+	-> see source file: 2018-09-23 fast K-line plus ISO9141 OBD - 125031.X68
+0x105ca - change JSR command endpoint from $22ada to $31030 
+	to use patched-in code
+	4EB9 00022ADA -> 4EB9 00031030
+
+v1,2 - now includes more robust R/W packet error checking
+*------------------------------------------------------------*

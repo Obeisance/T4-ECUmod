@@ -39,6 +39,6 @@ which is [header length cmd SCCPC11105HA30000 sum]
 
 A 'write to memory' command is similar, but instead uses the 
 write command byte 0x88 instead of the read command byte 0x11
-write memory: [55 #bytes_in_packet 88 #bytes_to_write 24_bit_addr ... etc. ... sum]
+write memory: [55 #bytes_in_packet 88 #bytes_to_write 24_bit_addr data_to_write ... etc. ... sum]
 write memory response: [AA 04 88 36] -> acknowledge of write command does not return
 any data

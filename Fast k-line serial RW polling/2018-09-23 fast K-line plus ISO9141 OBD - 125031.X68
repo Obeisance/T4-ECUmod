@@ -72,7 +72,7 @@ jump_start
     DC.W check_OBD_mode-jump_start-$4  ;if OBD init mode is 9, then we continue in the routine
     BRA.W end_OBD_routine
 check_OBD_mode
-    CMPI.B #5,(A4)  ; we always have at least 5 bytes in an OBD query
+    CMPI.B #5,(A4)  ; we always have at least 5 bytes in an OBD query, so we will not proceed until we have collected at least 5 bytes
     BCS.W check_error_states    ; branch if we don't have enough bytes
     CMPI.B #104,(A2)     ; check for correct packet structure [104 106 241 MODE PID checksum]
     BNE.W incorrect_structure_for_ISO_9141
@@ -346,8 +346,10 @@ incorrect_structure_for_ISO_9141
     BHI.B no_correct_packet_structure
     MOVEQ #0,D0
     MOVE.B ($1,A2),D0
-    CMP.B (A4),D0
+    CMP.B (A4),D0           ; compare "num bytes received" in (A4) to what the packet says it should contain
     BNE.W end_OBD_routine   ; do nothing more until we've read in the entire packet
+    CMPI.B #8,(A4)          ; every one of these special packets will have at least 8 bytes [85, #bytes_in_packet, cmd, #bytes_for_command_interest, addr0, addr1, addr3, sum]
+    BRA.B no_correct_packet_structure   ; we'll double check this, in case someone sends a malformed packet
     CMPI.B #17,($2,A2)
     BEQ.B process_special_cmd
     CMPI.B #136,($2,A2)
@@ -419,13 +421,13 @@ end_checksum
     
 OBD_Mode_0x3C_resp
     MOVE.W (SCCR0).L,D0
-    CMPI.W #60,D0
-    BNE switch_to_10400
+    CMPI.W #60,D0           ; check to see if we're at 10419 baud
+    BNE switch_to_10400     ; if not, then switch to 10419 baud
     MOVE.B #72,($811e8).L   ; Assemble a fixed packet
     MOVE.B #107,($811e9).L
     MOVE.B #16,($811ea).L
     MOVE.B #124,($811eb).L
-    MOVE.B #$31,($811ec).L
+    MOVE.B #$31,($811ec).L  ; we're going to change to 125031 baud after we send this message
     MOVE.B #$32,($811ed).L
     MOVE.B #$35,($811ee).L
     MOVE.B #$30,($811ef).L
@@ -443,7 +445,7 @@ check_serial_status
     TST.B D0
     BNE.B check_serial_status   ; loop until we're done sending data
     MOVE.W #0,(SCCR1).L    ; Disable the serial comms
-    MOVE.W #5,(SCCR0).L    ; Change the baud rate to 1: 625156.3; 2: 312578.1; 3: 208385.4; 4: 156289.1; 5: 125031.3; 6: 104192.7
+    MOVE.W #5,(SCCR0).L    ; Change the baud rate to 1: 625156.3; 2: 312578.1; 3: 208385.4; 4: 156289.1; 5: 125031.3; 6: 104192.7, etc.
     MOVE.W #44,(SCCR1).L    ; Enable the serial comms
     BRA end_chg_baud
 switch_to_10400
@@ -451,7 +453,7 @@ switch_to_10400
     MOVE.B #107,($811e9).L
     MOVE.B #16,($811ea).L
     MOVE.B #124,($811eb).L
-    MOVE.B #$31,($811ec).L
+    MOVE.B #$31,($811ec).L  ; we're going to change to 10419 baud after we send this message
     MOVE.B #$30,($811ed).L
     MOVE.B #$34,($811ee).L
     MOVE.B #$31,($811ef).L
@@ -474,28 +476,29 @@ end_chg_baud
     RTS
 
 special_serial_resp ; This function can only work with the above serial routine due to reliance on address register population
+                    ; so far, we have only guaranteed to have read in 8 bytes
     LINK A6,#-28
     MOVEM.L A1/A0/D4/D3/D2/D1,($4,A7)
     LEA Serial_send_buffer,A0
-    CLR.B (A3)   ; let's count up the checksum on this RAM address
+    CLR.B (A3)   ; let's count up the checksum on this RAM address -> we'll send this with the final outgoing packet
     MOVEQ #0,D1 ; An index into the send packet
     MOVEQ #170,D0 ; Start building the send packet
     MOVE.B D0,($0,A0,D1.L)
     ADD.B D0,(A3)
     ADDQ.B #2,D1    ; For now, skip over the 'number of bytes' byte
     CMPI.B #17,($2,A2)
-    BNE.W special_write
+    BNE.W special_write     ; if the command byte is not 17, it is 136 (these two are the only ones which would allow entry to this function)
     ; Read data from ROM
     MOVEQ #17,D0
     MOVE.B D0,($0,A0,D1.L)
     ADD.B D0,(A3)
     ADDQ.B #1,D1
     MOVEQ #3,D2 ; An index into the read packet
-    BRA.B Read_data_cond_check
+    BRA.B Read_data_cond_check  ; make sure we have enough bytes in the packet to read an address
     ; Now process the read data commands in the message
 Read_data_loop_start
-    MOVE.L ($1,A2,D2.L),D0
-    ASR.L #8,D0
+    MOVE.L ($1,A2,D2.L),D0  ; grab the address that we're interested in
+    ASR.L #8,D0             ; get rid of the low byte, that is not part of the address
     ANDI.L #16777215,D0 ; mask the address to three bytes
     MOVEA.L D0,A1   ; Now we have the address to read from
     MOVE.B ($0,A2,D2.L),D0  ; Now we also have the number of bytes to read
@@ -507,17 +510,21 @@ copy_data_loop_start
     ADDQ.B #1,D1    ; increment our send packet index
     SUBQ.B #1,D0    ; decrement our 'bytes left to read' counter
 copy_data_cond_check
-    CMPI.B #127,D1  ; Make sure we are not trying to read too many bytes
+    CMPI.B #127,D1  ; Make sure we are not trying to read too many bytes; check the send packet index, leaving space for the checksum
     BGE.B send_packet
-    CMPI.B #0,D0
+    CMPI.B #0,D0    ; check to see if we've sent all the required data
     BNE.B copy_data_loop_start
     ADDI.B #4,D2    ; Increment our read index to the next command
 Read_data_cond_check
-    MOVE.B (A4),D3
-    SUBQ.B #1,D3
-    CMP.B D3,D2   ; compare our read index to the number of bytes read in the buffer
-    BLO Read_data_loop_start
-    BRA.B send_packet
+    MOVE.B (A4),D3  ; total number of bytes in the received packet
+    SUBQ.B #1,D3    ; total number of bytes - 1 = index of packet checksum
+    CMP.B D3,D2     ; compare our packet read index to the read buffer checksum index
+    BHS.B send_packet ; if our index is on or past the checksum we'll end and send the packet
+    MOVE.B D2,D4    ; else, check to see if we have enough extra bytes in the packet - groups of four. D2 = packet read index
+    ADDQ.B #3,D4    ; packet read index + 3 = final data byte in the next set of four 
+    CMP.B D3,D2     ; compare our read index + the presumed next 4 bytes to the number of bytes in the read buffer
+    BLO Read_data_loop_start ; if our index is not on or past the checksum, keep going
+    BRA.B send_packet   ; else, if the index is on or past the checksum, we're finished
 
 special_write
     MOVEQ #136,D0
@@ -531,8 +538,8 @@ Write_data_loop_start
     MOVE.L ($1,A2,D2.L),D0
     ASR.L #8,D0
     ANDI.L #16777215,D0 ; mask the address to three bytes
-    MOVEA.L D0,A1   ; Now we have the address to read from
-    MOVE.B ($0,A2,D2.L),D0  ; Now we also have the number of bytes to read
+    MOVEA.L D0,A1   ; Now we have the address to write to
+    MOVE.B ($0,A2,D2.L),D0  ; Now we also have the number of bytes to write to that address
     ADDQ.B #4,D2
     MOVE.B (A4),D3 
     SUB.B D2,D3    ; check to see that a sufficient number of bytes is in the packet
@@ -546,13 +553,17 @@ write_block_loop_start
     SUBQ.B #1,D0
     ADDQ.B #1,D2
 write_block_cond_check
-    CMPI.B #0,D0
+    CMPI.B #0,D0    ; check to see if we need to send more bytes
     BNE write_block_loop_start    
 Write_data_cond_check
     MOVE.B (A4),D3
     SUBQ.B #1,D3
-    CMP.B D3,D2
-    BLO Write_data_loop_start    
+    CMP.B D3,D2 ; check to see if our read packet index is on or past the checksum
+    BHS.B send_packet ; if our index is on or past the checksum we'll end and send the packet
+    MOVE.B D2,D4    ; else, check to see if we have enough bytes in the packet
+    ADDQ.B #3,D4    ; packet read index + 3 = final data byte in the next set of four (num bytes to send + addr) 
+    CMP.B D3,D2     ; compare our read index + the presumed next 4 bytes to the number of bytes in the read buffer
+    BLO Write_data_loop_start
 send_packet
     MOVE.B D1,D3
     ADDQ.B #1,D3
@@ -575,6 +586,10 @@ end_special_ser_routine
 * Put variables and constants here
 
     END    START        ; last line of source
+
+
+
+
 
 
 
